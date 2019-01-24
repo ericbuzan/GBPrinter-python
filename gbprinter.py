@@ -6,10 +6,12 @@ class GBPrinter:
 
     def __init__(self,port=None):
         if port == None:
-            port = self.find_gbp_serial()
-        self.gbp_serial = serial.Serial(port,timeout=.2)
-        print('sleep for 2 seconds to prep serial...')
-        sleep(2.5)
+            self.find_gbp_serial()
+        else:
+            print('Printer on {} you say?'.format(port))
+            self.gbp_serial = serial.Serial(port,timeout=.2)
+            print('sleep for 2 seconds to prep serial...')
+            sleep(2.5)
 
 
     def find_gbp_serial(self):
@@ -36,19 +38,19 @@ class GBPrinter:
 
         best_port = None
         for port in good_ports:
-            with serial.Serial(port,timeout=.2) as self.gbp_serial:
-                print('checking port',port)
-                sleep(2.5)
-                response = self.cmd_status()
-                if response[0] in [0x80,0x81]:
-                    best_port = port
-                    break
+            self.gbp_serial = serial.Serial(port,timeout=.2)
+            print('checking port',port)
+            sleep(2.5)
+            response = self.cmd_status()
+            if response[0] in [0x80,0x81]:
+                best_port = port
+                break
 
         if best_port == None:
             raise IOError("Can't find printer!")
+        else:
+            print('GBP found on port', best_port)
 
-        print('GBP found on port', best_port)
-        return best_port
 
     def send_byte(self,byte):
         if type(byte) == int:
