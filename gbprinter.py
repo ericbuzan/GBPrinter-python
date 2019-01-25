@@ -1,17 +1,21 @@
 import serial
 from time import sleep
 import platform
+import logging
 
 class GBPrinter:
 
     def __init__(self,port=None):
+        self.logger = logging.getLogger(__name__)
+
         if port == None:
             self.find_gbp_serial()
         else:
-            print('Printer on {} you say?'.format(port))
+            self.logger.info('Printer on {} you say?'.format(port))
             self.gbp_serial = serial.Serial(port,timeout=.2)
-            print('sleep for 2 seconds to prep serial...')
+            self.logger.info('sleep for 2 seconds to prep serial...')
             sleep(2.5)
+        
 
 
     def find_gbp_serial(self):
@@ -34,12 +38,12 @@ class GBPrinter:
             except (OSError, serial.SerialException):
                 pass
 
-        print('good ports are',good_ports)
+        self.logger.info('good ports are ' + ','.join(good_ports))
 
         best_port = None
         for port in good_ports:
             self.gbp_serial = serial.Serial(port,timeout=.2)
-            print('checking port',port)
+            self.logger.info('checking port ' + port)
             sleep(2.5)
             response = self.cmd_status()
             if response[0] in [0x80,0x81]:
@@ -49,7 +53,7 @@ class GBPrinter:
         if best_port == None:
             raise IOError("Can't find printer!")
         else:
-            print('GBP found on port', best_port)
+            self.logger.info('GBP found on port ' + best_port)
 
 
     def send_byte(self,byte):
@@ -67,7 +71,18 @@ class GBPrinter:
         #print('received', response)
         return response
 
-    def send_command(self,cmd,compression=0,packet=None,text_status=False):
+    commands = {
+        1: 'INIT',
+        2: 'PRINT',
+        4: 'DATA',
+        8: 'BREAK',
+        15: 'STATUS'
+    }
+
+    def send_command(self,cmd,compression=0,packet=None):
+
+        self.logger.info('Sending {} command'.format(self.commands[cmd]))
+
         #magic bytes
         self.send_byte(0x88)
         self.send_byte(0x33)
@@ -91,10 +106,11 @@ class GBPrinter:
 
         #response
         response = self.get_response()
-        if text_status:
-            return self.translate_status(response)
-        else:
-            return response       
+
+        self.logger.info('Received {} {}'.format(hex(response[0]),hex(response[1])))
+        self.logger.debug(self.translate_status(response))
+
+        return response       
 
     def send_two_bytes(self,num):
         low,high = (num % 0x100, (num >> 8) % 0x100)
@@ -112,13 +128,16 @@ class GBPrinter:
     def cmd_init(self):
         return self.send_command(0x01)
 
-    def cmd_print(self,top_margin=0,bottom_margin=0,palette=0xE4,exposure=0x40):
+    def cmd_print(self,top_margin=0,bottom_margin=0,palette=0xE4,exposure=0x40,pages=1):
         margin = ( (top_margin % 16) << 4 )| (bottom_margin % 16)
-        packet = bytes([0x01,margin,palette,exposure])
+        packet = bytes([pages,margin,palette,exposure])
         return self.send_command(0x02,packet=packet)
 
     def cmd_data(self,packet=None):
         return self.send_command(0x04,packet=packet)
+
+    def cmd_break(self):
+        return self.send_command(0x08)
 
     def cmd_status(self):
         return self.send_command(0x0F)
@@ -137,52 +156,9 @@ class GBPrinter:
     def translate_status(self,full_status):
         keepalive,status = full_status
         status_bits = [i=='1' for i in reversed('{:08b}'.format(status))]
-        if keepalive not in [0x80,0x81]:
+        if full_status  == [0xFF,0xFF]:
             return ['Not connected']
         elif not any(status_bits):
             return ['OK']
         else:
             return [s for i,s in enumerate(self.statuses) if status_bits[i]]
-
-
-if __name__ == '__main__':
-
-    printer = GBPrinter()
-
-    payload = bytes([i%256 for i in range(640)])
-    payload2 = bytes([0xFF,0x00,0x7E,0xFF,0x85,0x81,0x89,0x83,0x93,0x85,0xA5,0x8B,0xC9,0x97,0x7E,0xFF]*40)
-
-    paylel = [payload,payload2]
-
-    print('send command STATUS')
-    response = printer.cmd_status()
-    print('got response',response)
-    print(printer.translate_status(response))
-
-    for i in range(12):
-        print('send command DATA',i+1)
-        load = paylel[i%2]
-        printer.cmd_data(load)
-        response = printer.cmd_status()
-        print('got response',response)
-        print(printer.translate_status(response))
-
-    print('send command DATA')
-    printer.cmd_data()
-    response = printer.cmd_status()
-    print('got response',response)
-    print(printer.translate_status(response))
-
-
-    print('send command PRINT')
-    printer.cmd_print(0x0,0x4)
-    response = printer.cmd_status()
-    print('got response',response)
-    print(printer.translate_status(response))
-
-    for i in range(12):
-        sleep(1.5)
-        print('send command STATUS',i+1)
-        response = printer.cmd_status()
-        print('got response',response)
-        print(printer.translate_status(response))
