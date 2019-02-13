@@ -128,8 +128,8 @@ def matrix_to_image(matrix):
     image = Image.frombytes('L',s,raw_bytes)
     return image
 
-def image_to_gbtile(image,dither='bayer'):
-    image = gray_resize(image)
+def image_to_gbtile(image,dither='bayer',rotate='auto'):
+    image = gray_resize(image,rotate=rotate)
     mat = image_to_matrix(image)
     if dither == 'bayer':
         new_mat = bayer_dither(mat)

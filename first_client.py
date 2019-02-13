@@ -14,11 +14,15 @@ def main():
         dither = sys.argv[2]
     except IndexError:
         dither = 'bayer'
+    try:
+        rotate = sys.argv[3]
+    except IndexError:
+        rotate = 'auto'
 
     logging.basicConfig(level=logging.DEBUG)
     logger = logging.getLogger(__name__)
 
-    payload = image_to_gbtile(image_filename,dither)
+    payload = image_to_gbtile(image_filename,dither,rotate)
 
     printer = gbprinter.GBPrinter()
 
