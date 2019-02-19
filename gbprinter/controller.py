@@ -3,13 +3,13 @@ from time import sleep
 import platform
 import logging
 
-class GBPrinter:
+class Controller:
 
     def __init__(self,port=None):
         self.logger = logging.getLogger(__name__)
 
         if port == None:
-            self.find_gbp_serial()
+            self.find_serial()
         else:
             self.logger.info('Printer on {} you say?'.format(port))
             self.gbp_serial = serial.Serial(port,timeout=.2)
@@ -18,7 +18,7 @@ class GBPrinter:
         
 
 
-    def find_gbp_serial(self):
+    def find_serial(self):
         opsys = platform.system()
         if opsys == 'Windows':
             ports = ['COM%s' % (i + 1) for i in range(2,256)]
@@ -64,24 +64,25 @@ class GBPrinter:
         elif type(byte) == bytes:
             pass
         else:
-            raise IOError('Must be bytes, int, or ASCII str')
-        #print('sending', byte)
+            raise IOError('Must be bytes, int, or ASCII-compatible string')
         self.gbp_serial.write(byte)
         response = self.gbp_serial.read()
-        #print('received', response)
         return response
 
     commands = {
-        1: 'INIT',
-        2: 'PRINT',
-        4: 'DATA',
-        8: 'BREAK',
-        15: 'STATUS'
+        0x1: 'INIT',
+        0x2: 'PRINT',
+        0x4: 'DATA',
+        0x8: 'BREAK',
+        0xF: 'STATUS'
     }
 
     def send_command(self,cmd,compression=0,packet=None):
 
-        self.logger.info('Sending {} command'.format(self.commands[cmd]))
+        if cmd not in self.commands:
+            raise ValueError('Invalid command type: {}'.format(cmd))
+
+        self.logger.debug('Sending {} command'.format(self.commands[cmd]))
 
         #magic bytes
         self.send_byte(0x88)
@@ -107,7 +108,7 @@ class GBPrinter:
         #response
         response = self.get_response()
 
-        self.logger.info('Received {} {}'.format(hex(response[0]),hex(response[1])))
+        self.logger.debug('Received {} {}'.format(hex(response[0]),hex(response[1])))
         self.logger.debug(self.translate_status(response))
 
         return response       
@@ -142,16 +143,16 @@ class GBPrinter:
     def cmd_status(self):
         return self.send_command(0x0F)
 
-    statuses = [
-        'Checksum Error',
-        'Printer Busy',
-        'Image Data Full',
-        'Unprocessed Data',
-        'Packet Error',
-        'Paper Jam',
-        'Other Error',
-        'Battery Too Low'
-    ]
+    statuses = {
+        0: 'Checksum Error',
+        1: 'Printer Busy',
+        2: 'Image Data Full',
+        3: 'Unprocessed Data',
+        4: 'Packet Error',
+        5: 'Paper Jam',
+        6: 'Other Error',
+        7: 'Battery Too Low'
+    }
     
     def translate_status(self,full_status):
         keepalive,status = full_status
@@ -161,4 +162,4 @@ class GBPrinter:
         elif not any(status_bits):
             return ['OK']
         else:
-            return [s for i,s in enumerate(self.statuses) if status_bits[i]]
+            return [s for i,s in self.statuses.items() if status_bits[i]]

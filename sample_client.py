@@ -1,5 +1,5 @@
-from gbimage import *
-import gbprinter
+import gbprinter.controller
+from gbprinter.image import image_to_gbtile
 import sys
 from time import sleep
 import logging
@@ -19,12 +19,13 @@ def main():
     except IndexError:
         rotate = 'auto'
 
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
 
     payload = image_to_gbtile(image_filename,dither,rotate)
+    logger.info('payload is ready')
 
-    printer = gbprinter.GBPrinter()
+    printer = gbprinter.controller.Controller()
 
     num_strips = len(payload)//640
     strips_done = 0
@@ -46,6 +47,8 @@ def main():
 
         printer.cmd_data()
         printer.cmd_status()
+
+        logger.info('sending print command'.format(i+1,num_strips))
 
         if strips_done == num_strips:
             printer.cmd_print(0x0,0x4)

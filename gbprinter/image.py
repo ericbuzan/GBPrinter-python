@@ -1,6 +1,12 @@
 from PIL import Image
 
 def gray_resize(image,rotate='auto',align='center'):
+    """
+    Resizes an image (either a PIL image object or a filepath) to fit in 160
+    pixels wide, optionally rotating in the process to be larger, and converts
+    to grayscale     
+    """
+
     if type(image) == str:
         image = Image.open(image)
 
@@ -38,6 +44,11 @@ def gray_resize(image,rotate='auto',align='center'):
     return image
 
 def image_to_matrix(image):
+    """
+    converts a PIL image object into a matrix of grayscale values
+    matrix = list of lists, no numpy here
+    """
+
     raw_bytes = image.tobytes()
     raw_num = [i for i in raw_bytes]
     #matrix = [[0]*16]*len(raw_num//16)
@@ -47,6 +58,11 @@ def image_to_matrix(image):
     return matrix
 
 def bayer_dither(matrix):
+    """
+    Performs Bayer dithering on an image matrix (created from image_to_matrix)
+    """
+
+
     coeff = [[ 0, 8, 2,10],
              [12, 4,14, 6],
              [ 3,11, 1, 9],
@@ -69,7 +85,7 @@ def bayer_dither(matrix):
 
 def convert_2bit(matrix):
     """
-    Converts grayscale to 2 bit gray palette ()0/85/170/255).
+    Converts grayscale to 2 bit gray palette (0/85/170/255).
     Colors are rounded to nearest color, so grays are more likely
     """
 
@@ -100,6 +116,11 @@ def convert_2bit_direct(matrix):
     return out_matrix
 
 def matrix_to_gbtile(matrix):
+    """
+    Converts a 2-bit image matrix from convert_2bit or whatnot into the Game Boy
+    tile format. The output is a bytestring (almost) ready to send to the GB Printer,
+    you'll have to chop it into 640-byte sections on your own.
+    """
 
     #convert to 0-3, where 0 is white and 3 is black
     raw_num_2bit = [(3-x//85) for y in matrix for x in y]
@@ -123,12 +144,19 @@ def matrix_to_gbtile(matrix):
     return gbtile
 
 def matrix_to_image(matrix):
+    """
+    Convert an image matrix back into a PIL image object, useful for debugging
+    """
     raw_bytes = bytes([x for y in matrix for x in y])
     s = (160,len(raw_bytes)//160)
     image = Image.frombytes('L',s,raw_bytes)
     return image
 
 def image_to_gbtile(image,dither='bayer',rotate='auto'):
+    """
+    Does the full conversion, image file/object goes in, gbtile bytestring 
+    comes out. This is what you want to use tor everyday processing
+    """
     image = gray_resize(image,rotate=rotate)
     mat = image_to_matrix(image)
     if dither == 'bayer':
