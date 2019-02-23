@@ -2,32 +2,27 @@
 #define GBIn 9
 #define GBOut 10
 
-#define delayMs 20
+#define bitDelay 60
+#define byteDelay 240
 
 uint8_t cmd;
 uint8_t resp;
-
-void setupPrinter(int in, int out, int clock) {
-  pinMode(in, INPUT);            // set pin to input
-  pinMode(out, OUTPUT);
-  pinMode(clock, OUTPUT);
-  digitalWrite(in, HIGH);        // turn on pullup resistors
-  digitalWrite(out, HIGH);       // turn on pullup resistors
-}
 
 uint8_t GBSerialIO(uint8_t cmd) {
   uint8_t resp=0;
   for (uint8_t c=0;  c<8;  c++) {
 
     //write cycle
-    digitalWrite(GBClock, 0);
+    
     if((cmd << c) & 0x80){
       digitalWrite(GBOut, 1);
     }
     else{ 
       digitalWrite(GBOut, 0);
     }
-    delayMicroseconds(delayMs);
+    digitalWrite(GBClock, 0);
+    
+    delayMicroseconds(bitDelay);
 
     //read cycle
     digitalWrite(GBClock, 1);
@@ -36,14 +31,17 @@ uint8_t GBSerialIO(uint8_t cmd) {
     {
       resp |= 1;                  
     }
-    delayMicroseconds(delayMs);
+    delayMicroseconds(bitDelay);
   }
-  delayMicroseconds(delayMs);
+  delayMicroseconds(byteDelay);
   return resp;
 }
 
 void setup() {
-  setupPrinter(GBIn, GBOut, GBClock);
+  pinMode(GBIn, INPUT_PULLUP);
+  pinMode(GBOut, OUTPUT);
+  pinMode(GBClock, OUTPUT);
+  digitalWrite(GBClock, 1);
   Serial.begin(9600);
 }
 
