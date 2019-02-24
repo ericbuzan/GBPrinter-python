@@ -1,3 +1,4 @@
+from . import image
 import serial
 from time import sleep
 import platform
@@ -5,6 +6,14 @@ import logging
 from enum import Enum
 from collections import defaultdict
 
+CHECKSUM_ERROR = 0
+PRINTING = 1
+IMAGE_FULL = 2
+UNPROCESSED_DATA = 3
+PACKET_ERROR = 4
+PAPER_JAM = 5
+OTHER_ERROR = 6
+LOW_BATTERY = 7
 
 class Emulator:
 
@@ -17,10 +26,43 @@ class Emulator:
             else:
                 self.logger.info('Printer on {} you say?'.format(port))
                 self.gbp_serial = serial.Serial(port,baudrate=115200,timeout=.2)
-            self.logger.info('sleep for 2 seconds to prep serial...')
-            sleep(2)
+                self.logger.info('sleep for 2 seconds to prep serial...')
+                sleep(2)
+            self.init_buffer()
+            self._fullimage = b''
 
+        def init_buffer(self):
+            self._status = b'\x00'
+            self._buffer = b''
+            self._print_fake = 0
 
+        @property
+        def status(self):
+            return [self._status[0]>>i & 0x01 for i in range(8)]
+
+        @property
+        def pages(self):
+            return self._pages
+
+        @property
+        def state(self):
+            return self._state
+
+        @property
+        def pages(self):
+            return len(self._buffer)//640
+        
+        def set_status(self,bit,new_status=True):
+            num = self._status[0]
+            if new_status:
+                num |= 2**bit
+            else:
+                num ^= 2**bit
+            self._status = bytes([num])
+
+        def get_status(self,bit):
+            return bool(self._status[0] & 2**bit)
+        
         def find_serial(self):
             opsys = platform.system()
             if opsys == 'Windows':
@@ -32,30 +74,99 @@ class Emulator:
             else:
                 raise EnvironmentError('Not Windows, Mac, or Linux, dunno where your serial ports would be')
 
+            good_ports = []
             for port in ports:
                 try:
-                    self.gbp_serial = serial.Serial(port,baudrate=115200,timeout=.2)
-                    self.logger.info('Arduino (I assume) found on port {}'.format(port))
-                    break
+                    s = serial.Serial(port)
+                    s.close()
+                    good_ports.append(port)
                 except (OSError, serial.SerialException):
                     pass
+
+            self.logger.info('good ports are ' + ','.join(good_ports))
+
+            best_port = None
+            for port in good_ports:
+                self.gbp_serial = serial.Serial(port,baudrate=115200,timeout=.2)
+                self.logger.info('checking port ' + port)
+                sleep(2)
+                self.gbp_serial.write(bytes([105]))
+                response = self.gbp_serial.read(4)
+                if response == b'nice':
+                    best_port = port
+                    break
+                else:
+                    self.gbp_serial.close()
+
+            if best_port == None:
+                raise IOError("Can't find Arduino!")
+            else:
+                self.logger.info('Arduino found on port ' + best_port)
 
         def get_gb_data(self):
             packet = self.current_packet
             from_gb = self.gbp_serial.read(4)
             if from_gb:
-                rx,tx,ard_state,data_remain = from_gb
-                        
+                rx,tx,ard_state,data_remain = from_gb     
                 packet.add_byte(rx)
-
-                #print('Byte received: {}, Packet status: {}'.format(rx,packet.status.name))
-
                 if packet.status == Status.COMPLETE:
-                    print('Packet complete, type {}, data size {}'.format(packet.type,packet.data_size))
-                    if packet.data_size == 4:
-                        print('Print data 0x{:02x} 0x{:02x} 0x{:02x} 0x{:02x}'.format(*packet.data))
-                    print('Checksum is {}'.format(self.current_packet.verify_checksum()))
+                    self.handle_packet(packet)
                     self.current_packet = Packet()
+
+        def handle_packet(self,packet):
+            self.logger.info('Packet received, type {}, data size {}'.format(packet.type,packet.data_size))
+            if packet.data_size == 4:
+                self.logger.debug('Print data 0x{:02x} 0x{:02x} 0x{:02x} 0x{:02x}'.format(*packet.data))
+            #self.logger.debug('Checksum is {}'.format(self.current_packet.verify_checksum()))
+
+            if packet.type == 1: #init
+                if not self.get_status(1): #if not currently printing
+                    self.init_buffer()
+
+            elif packet.type == 2: #print
+                self.set_status(PRINTING)
+                self.set_status(IMAGE_FULL)
+                self.set_status(UNPROCESSED_DATA,False)
+                end_margin = packet.data[1] % 16
+                self._fullimage += self._buffer
+                image_mat = image.gb_tile_to_matrix(self._fullimage)
+                image_obj = image.matrix_to_image(image_mat,save=True)
+                if end_margin != 0:
+                    self.logger.info('Full image sent!')
+                    self._fullimage = b''
+                else:
+                    self.logger.info('Partial image sent!')
+
+
+            elif packet.type == 4: #data
+                if not self.get_status(1): #if not currently printing
+                    if packet.data_size == 0:
+                        pass
+                    elif self.pages >= 9:
+                        self.set_status(PACKET_ERROR)
+                    else:
+                        self._buffer = self._buffer + bytes(packet.data)
+                        self.set_status(UNPROCESSED_DATA)
+                    self.logger.debug('Number of pages in buffer: {}'.format(self.pages))
+
+            elif packet.type == 8: #break
+                if self.get_status(PRINTING):
+                    self.init_buffer()
+
+            elif packet.type == 15: #status
+                if self.get_status(PRINTING):
+                    self._print_fake += 1
+                    if self._print_fake == 5:
+                        self.set_status(UNPROCESSED_DATA)
+                    if self._print_fake > 10:
+                        self.set_status(PRINTING,False)
+                        self.set_status(IMAGE_FULL,False)
+                        self.set_status(UNPROCESSED_DATA,False)
+                        self.init_buffer()
+
+            self.gbp_serial.write(self._status)
+            self.logger.debug('My status is: {}'.format(self.status))
+
 
 class Status(Enum):
     EMPTY = 0
@@ -78,11 +189,13 @@ p_type[1] = 'INIT'
 p_type[2] = 'PRINT'
 p_type[4] = 'DATA'
 p_type[8] = 'BREAK'
-p_type[15] = 'STATUS'
+p_type[0xF] = 'STATUS'
 
 
 class Packet:
     def __init__(self):
+        if not hasattr(self, 'logger'):
+            self.logger = logging.getLogger(__name__)
         self._raw_data = [0]*10 # size of a dataless packet
         self._status = Status.EMPTY
         self._bytes_stored = 0
@@ -118,7 +231,12 @@ class Packet:
 
     @property
     def type(self):
-        return p_type[self._raw_data[2]]    
+        return self._raw_data[2]
+
+    @property
+    def type_text(self):
+        return p_type[self._raw_data[2]]
+     
 
     def verify_checksum(self):
         return self.checksum == self.rx_checksum

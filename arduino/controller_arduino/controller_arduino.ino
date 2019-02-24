@@ -42,7 +42,7 @@ void setup() {
   pinMode(GBOut, OUTPUT);
   pinMode(GBClock, OUTPUT);
   digitalWrite(GBClock, 1);
-  Serial.begin(9600);
+  Serial.begin(115200);
 }
 
 void loop() {

@@ -1,4 +1,5 @@
 from PIL import Image
+import time
 
 def gray_resize(image,rotate='auto',align='center'):
     """
@@ -143,14 +144,34 @@ def matrix_to_gbtile(matrix):
 
     return gbtile
 
-def matrix_to_image(matrix):
+def matrix_to_image(matrix,save=False):
     """
     Convert an image matrix back into a PIL image object, useful for debugging
     """
     raw_bytes = bytes([x for y in matrix for x in y])
     s = (160,len(raw_bytes)//160)
     image = Image.frombytes('L',s,raw_bytes)
+    if save:
+        image.save(time.strftime('gbp_out/gbp_%Y%m%d_%H%M%S.png'),'PNG')
     return image
+
+def gb_tile_to_matrix(gbtile_bytes):
+    num_pages = len(gbtile_bytes)//640
+    matrix_2bit = [[0]*160 for i in range(16*num_pages)]
+    for s in range(num_pages*2):
+        strip_bytes = gbtile_bytes[320*s:320*(s+1)]
+        for t in range(20):
+            tile_bytes = strip_bytes[16*t:16*(t+1)]
+            for r in range(8):
+                row_bytes = tile_bytes[2*r:2*(r+1)]
+                low, high = row_bytes
+                mat_row = [(low>>i & 1) + 2*(high>>i & 1) for i in reversed(range(8))]
+                matrix_2bit[s*8+r][t*8:(t+1)*8] = mat_row
+
+    matrix = [[(3-x)*85 for x in row] for row in matrix_2bit]
+    return matrix
+
+
 
 def image_to_gbtile(image,dither='bayer',rotate='auto'):
     """

@@ -3,26 +3,29 @@ from gbprinter.image import image_to_gbtile
 import sys
 from time import sleep
 import logging
+import argparse
 
 def main():
-    try:
-        image_filename = sys.argv[1]
-    except IndexError:
-        print('Give a file to convert!')
-        sys.exit(1)
-    try:
-        dither = sys.argv[2]
-    except IndexError:
-        dither = 'bayer'
-    try:
-        rotate = sys.argv[3]
-    except IndexError:
-        rotate = 'auto'
+    parser = argparse.ArgumentParser(description='Print on a Game Boy Printer!')
+    parser.add_argument('-r', '--rotate',
+                        dest="rotate", 
+                        default='auto', 
+                        choices=['auto','portrait','landscape','none'],
+                        help="How to rotate the image"
+                        )
+    parser.add_argument('-d', '--dithering',
+                        dest="dither", 
+                        default='bayer', 
+                        choices=['bayer','none'],
+                        help="Dithering algorithm to use"
+                        )
+    parser.add_argument('filename')
+    args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG)
     logger = logging.getLogger(__name__)
 
-    payload = image_to_gbtile(image_filename,dither,rotate)
+    payload = image_to_gbtile(args.filename,args.dither,args.rotate)
     logger.info('payload is ready')
 
     printer = gbprinter.controller.Controller()
@@ -59,8 +62,6 @@ def main():
 
         while printer.cmd_status()[1] != 0:
             sleep(.5)
-
-    new_image.show()
 
 if __name__ == '__main__':
     main()

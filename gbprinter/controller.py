@@ -12,7 +12,7 @@ class Controller:
             self.find_serial()
         else:
             self.logger.info('Printer on {} you say?'.format(port))
-            self.gbp_serial = serial.Serial(port,timeout=.2)
+            self.gbp_serial = serial.Serial(port,baudrate=115200,timeout=.2)
             self.logger.info('sleep for 2 seconds to prep serial...')
             sleep(2.5)
         
@@ -42,9 +42,9 @@ class Controller:
 
         best_port = None
         for port in good_ports:
-            self.gbp_serial = serial.Serial(port,timeout=.2)
+            self.gbp_serial = serial.Serial(port,baudrate=115200,timeout=.2)
             self.logger.info('checking port ' + port)
-            sleep(2.5)
+            sleep(2)
             response = self.cmd_status()
             if response[0] in [0x80,0x81]:
                 best_port = port

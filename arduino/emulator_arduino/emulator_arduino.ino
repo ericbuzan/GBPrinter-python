@@ -11,6 +11,7 @@
 #define DATASUM_DONE 4
 #define RESPONSE_PARTIAL 5
 
+byte temp_byte;
 byte status;
 byte rx_byte;
 byte tx_byte;
@@ -54,7 +55,7 @@ void setup() {
   pinMode(GBOut, OUTPUT);
   pinMode(GBClock, INPUT_PULLUP);
   pinMode(LED_BUILTIN, OUTPUT);
-  for(int i=0; i<5; i++){
+  for(int i=0; i<2; i++){
     digitalWrite(LED_BUILTIN, HIGH);
     delay(50);
     digitalWrite(LED_BUILTIN, LOW);
@@ -69,7 +70,12 @@ void setup() {
 
 void loop() {
   if (Serial.available() > 0) {
-    status = Serial.read();
+    temp_byte = Serial.read();
+    if (temp_byte == 105) {
+      Serial.write("nice");
+    } else {
+      status = temp_byte;
+    }
   }
     
   if (digitalRead(GBClock) == 0) {
