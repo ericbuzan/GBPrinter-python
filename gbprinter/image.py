@@ -49,20 +49,21 @@ def image_to_matrix(image):
     converts a PIL image object into a matrix of grayscale values
     matrix = list of lists, no numpy here
     """
+    width,height = image.size
 
     raw_bytes = image.tobytes()
     raw_num = [i for i in raw_bytes]
     #matrix = [[0]*16]*len(raw_num//16)
     #for i in range(len(raw_num//16)):
     #    matrix[i] = raw_num[16*i:16*(i+1)]
-    matrix = [raw_num[160*i:160*(i+1)] for i in range(len(raw_num)//160)]
+    matrix = [raw_num[width*i:width*(i+1)] for i in range(len(raw_num)//width)]
     return matrix
 
 def bayer_dither(matrix):
     """
     Performs Bayer dithering on an image matrix (created from image_to_matrix)
     """
-
+    width = len(matrix[0])
 
     coeff = [[ 0, 8, 2,10],
              [12, 4,14, 6],
@@ -71,10 +72,10 @@ def bayer_dither(matrix):
 
     unpacked = [x for y in coeff for x in y]
 
-    out_matrix = [[0 for i in range(160)] for i in range(len(matrix))]
+    out_matrix = [[0 for i in range(width)] for i in range(len(matrix))]
 
     for y in range(len(matrix)):
-        for x in range(160):
+        for x in range(width):
             n = matrix[y][x]
             c = coeff[y%4][x%4] + .5
             r = 82
@@ -90,10 +91,12 @@ def convert_2bit(matrix):
     Colors are rounded to nearest color, so grays are more likely
     """
 
-    out_matrix = [[0 for i in range(160)] for i in range(len(matrix))]
+    width = len(matrix[0])
+
+    out_matrix = [[0 for i in range(width)] for i in range(len(matrix))]
 
     for y in range(len(matrix)):
-        for x in range(160):
+        for x in range(width):
             n = matrix[y][x]
             out_matrix[y][x] = 3 - round(n/85)
     return out_matrix
@@ -103,10 +106,12 @@ def convert_2bit_direct(matrix):
     Converts grayscale to 2 bit gray palette (0/85/170/255).
     Colors are divided into equal bins, so all 4 shades are equally likely
     """
-    out_matrix = [[0 for i in range(160)] for i in range(len(matrix))]
+
+    width = len(matrix[0])
+    out_matrix = [[0 for i in range(width)] for i in range(len(matrix))]
 
     for y in range(len(matrix)):
-        for x in range(160):
+        for x in range(width):
             n = matrix[y][x]
             o = n//64
             if o > 3:
@@ -157,12 +162,14 @@ def palette_convert(palette_tuple):
     palette_list = [int(color,16) for color in palette_pairs]
     return palette_list
 
-def matrix_to_image(matrix,palette='gray',save=False):
+def matrix_to_image(matrix_2bit,palette='gray',save=False):
     """
-    Convert an image matrix back into a PIL image object, useful for debugging
+    Convert an image matrix back into a PIL image object
     """
+    matrix = [[(3-x) for x in row] for row in matrix_2bit]
+    width = len(matrix[0])
     raw_bytes = bytes([x for y in matrix for x in y])
-    dim = (160,len(raw_bytes)//160)
+    dim = (width,len(raw_bytes)//width)
     image = Image.frombytes('P',dim,raw_bytes)
     image.putpalette(palette_convert(PALETTES[palette]))
     if save:
@@ -192,7 +199,7 @@ def gb_tile_to_matrix(gbtile_bytes):
                 matrix_2bit[s*8+r][t*8:(t+1)*8] = mat_row
 
     #flip color order from gbtile format
-    matrix = [[(3-x) for x in row] for row in matrix_2bit]
+    #matrix = [[(3-x) for x in row] for row in matrix_2bit]
     return matrix
 
 
