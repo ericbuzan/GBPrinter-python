@@ -156,6 +156,11 @@ def matrix_to_image(matrix,save=False):
     return image
 
 def gb_tile_to_matrix(gbtile_bytes):
+    #only needed for dealnig with compressed data that's not uncompressed
+    #testing only
+    padding = bytes(640-(len(gbtile_bytes)%640))
+    gbtile_bytes = gbtile_bytes + bytes(padding)
+
     num_pages = len(gbtile_bytes)//640
     matrix_2bit = [[0]*160 for i in range(16*num_pages)]
     for s in range(num_pages*2):

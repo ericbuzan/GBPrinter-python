@@ -1,7 +1,7 @@
 //Arduino pins
 #define GBClock 8
-#define GBIn 9
-#define GBOut 10
+#define GBIn 10 //on the emulated device, out for the physical device
+#define GBOut 9 //on the emulated device, in for the physical device
 
 //states of incoming packets from Game Boy
 #define IDLING 0

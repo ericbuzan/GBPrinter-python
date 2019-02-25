@@ -41,10 +41,6 @@ class Emulator:
             return [self._status[0]>>i & 0x01 for i in range(8)]
 
         @property
-        def pages(self):
-            return self._pages
-
-        @property
         def state(self):
             return self._state
 
@@ -145,9 +141,14 @@ class Emulator:
                     elif self.pages >= 9:
                         self.set_status(PACKET_ERROR)
                     else:
-                        self._buffer = self._buffer + bytes(packet.data)
+                        if packet.header[1]: #if compression
+                            data = self.decompress(packet.data)
+                        else:
+                            data = packet.data
+                        self._buffer = self._buffer + bytes(data)
                         self.set_status(UNPROCESSED_DATA)
                     self.logger.debug('Number of pages in buffer: {}'.format(self.pages))
+                    self.logger.debug('Number of bytes in buffer: {}'.format(len(self._buffer)))
 
             elif packet.type == 8: #break
                 if self.get_status(PRINTING):
@@ -166,6 +167,29 @@ class Emulator:
 
             self.gbp_serial.write(self._status)
             self.logger.debug('My status is: {}'.format(self.status))
+
+        def decompress(self,comp_data):
+            len_comp = len(comp_data)
+            raw_data = [0]*640
+            comp_offset = 0
+            raw_offset = 0
+            while comp_offset < len(comp_data):
+                command_byte = comp_data[comp_offset]
+                #self.logger.debug('command byte {}/{}: {}'.format(comp_offset,len_comp, command_byte))
+                comp_offset += 1
+                if command_byte & 0x80: #compressed run
+                    length = command_byte - 0x80 + 2
+                    duped_byte = comp_data[comp_offset]
+                    comp_offset += 1
+                    raw_data[raw_offset:raw_offset+length] = [duped_byte]*length
+                    raw_offset += length
+                else: #uncompressed run
+                    length = command_byte + 1
+                    unduped_data = comp_data[comp_offset:comp_offset+length]
+                    comp_offset += length
+                    raw_data[raw_offset:raw_offset+length] = unduped_data
+                    raw_offset += length
+            return raw_data
 
 
 class Status(Enum):
