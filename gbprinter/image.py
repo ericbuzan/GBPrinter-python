@@ -95,7 +95,7 @@ def convert_2bit(matrix):
     for y in range(len(matrix)):
         for x in range(160):
             n = matrix[y][x]
-            out_matrix[y][x] = 85 * round(n/85)
+            out_matrix[y][x] = 3 - round(n/85)
     return out_matrix
 
 def convert_2bit_direct(matrix):
@@ -113,7 +113,7 @@ def convert_2bit_direct(matrix):
                 o = 3
             if o < 0:
                 o = 0
-            out_matrix[y][x] = 85*o
+            out_matrix[y][x] = 3 - o
     return out_matrix
 
 def matrix_to_gbtile(matrix):
@@ -124,14 +124,15 @@ def matrix_to_gbtile(matrix):
     """
 
     #convert to 0-3, where 0 is white and 3 is black
-    raw_num_2bit = [(3-x//85) for y in matrix for x in y]
+    #nope, done by conversion to 2bit now
+    raw_num = [x for y in matrix for x in y]
 
     gbtile = b''
     B = 160*8 #pixels in a 160x8 strip
-    num_strips = len(raw_num_2bit)//B
-    num_tiles = len(raw_num_2bit)//64
+    num_strips = len(raw_num)//B
+    num_tiles = len(raw_num)//64
     for s in range(num_strips):
-        strip = raw_num_2bit[B*s:B*(s+1)]
+        strip = raw_num[B*s:B*(s+1)]
         for t in range(20):
             tile_hex = b''
             for r in range(8):
@@ -144,22 +145,39 @@ def matrix_to_gbtile(matrix):
 
     return gbtile
 
-def matrix_to_image(matrix,save=False):
+PALETTES = {
+    'gray': ('000000','555555','AAAAAA','FFFFFF'),
+    'camera' : ('000000','0063C5','7BFF31','FFFFFF'),
+    'yellow' : ('000000','7B4A00','FFFF00','FFFFFF'),
+}
+
+def palette_convert(palette_tuple):
+    palette_str = ''.join(palette_tuple)
+    palette_pairs = [palette_str[2*i:2*i+2] for i in range(12)]
+    palette_list = [int(color,16) for color in palette_pairs]
+    return palette_list
+
+def matrix_to_image(matrix,palette='gray',save=False):
     """
     Convert an image matrix back into a PIL image object, useful for debugging
     """
     raw_bytes = bytes([x for y in matrix for x in y])
-    s = (160,len(raw_bytes)//160)
-    image = Image.frombytes('L',s,raw_bytes)
+    dim = (160,len(raw_bytes)//160)
+    image = Image.frombytes('P',dim,raw_bytes)
+    image.putpalette(palette_convert(PALETTES[palette]))
     if save:
         image.save(time.strftime('gbp_out/gbp_%Y%m%d_%H%M%S.png'),'PNG')
     return image
 
 def gb_tile_to_matrix(gbtile_bytes):
-    #only needed for dealnig with compressed data that's not uncompressed
-    #testing only
-    padding = bytes(640-(len(gbtile_bytes)%640))
-    gbtile_bytes = gbtile_bytes + bytes(padding)
+    """
+    converts bytes in GB tile format to 2-bit matrix
+    """
+
+    #only needed for dealing with compressed data that's not uncompressed
+    #testing only, probably no longer needed
+    #padding = bytes(640-(len(gbtile_bytes)%640))
+    #gbtile_bytes = gbtile_bytes + bytes(padding)
 
     num_pages = len(gbtile_bytes)//640
     matrix_2bit = [[0]*160 for i in range(16*num_pages)]
@@ -173,17 +191,18 @@ def gb_tile_to_matrix(gbtile_bytes):
                 mat_row = [(low>>i & 1) + 2*(high>>i & 1) for i in reversed(range(8))]
                 matrix_2bit[s*8+r][t*8:(t+1)*8] = mat_row
 
-    matrix = [[(3-x)*85 for x in row] for row in matrix_2bit]
+    #flip color order from gbtile format
+    matrix = [[(3-x) for x in row] for row in matrix_2bit]
     return matrix
 
 
 
-def image_to_gbtile(image,dither='bayer',rotate='auto'):
+def image_to_gbtile(image,dither='bayer',rotate='auto',align='center'):
     """
     Does the full conversion, image file/object goes in, gbtile bytestring 
     comes out. This is what you want to use tor everyday processing
     """
-    image = gray_resize(image,rotate=rotate)
+    image = gray_resize(image,rotate=rotate,align=align)
     mat = image_to_matrix(image)
     if dither == 'bayer':
         new_mat = bayer_dither(mat)
@@ -191,7 +210,6 @@ def image_to_gbtile(image,dither='bayer',rotate='auto'):
         new_mat = convert_2bit_direct(mat)
     else:
         raise IOError('dither must be "bayer" or "none"')
-    new_image = matrix_to_image(new_mat)
     gb_tiles = matrix_to_gbtile(new_mat)
 
     return gb_tiles
