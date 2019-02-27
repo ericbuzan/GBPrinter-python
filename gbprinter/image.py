@@ -152,8 +152,21 @@ def matrix_to_gbtile(matrix):
 
 PALETTES = {
     'gray': ('000000','555555','AAAAAA','FFFFFF'),
-    'camera' : ('000000','0063C5','7BFF31','FFFFFF'),
-    'yellow' : ('000000','7B4A00','FFFF00','FFFFFF'),
+    'gbcamera' : ('000000','0063C5','7BFF31','FFFFFF'),
+    'gbred': ('000000','943A3A','FF8484','FFFFFF'),
+    'gborange': ('000000','843100','FFAD63','FFFFFF'),
+    'gbyellow' : ('000000','7B4A00','FFFF00','FFFFFF'),
+    'gbgreen': ('000000','008400','7BFF31','FFFFFF'),
+    'gbblue': ('000000','0000FF','63A5FF','FFFFFF'),
+    'gbpurple': ('000000','52528C','8C8CDE','FFFFFF'),
+    'gbbrown': ('5A3108','846B29','CE9C84','FFE6C5'),
+    'gbrby': ('000000','9494FF','FF9494','FFFFA5'),
+    'gbredyellow': ('000000','FF0000','FFF00','FFFFFF'),
+    'gbgreenorange': ('000000','FF4200','52FF00','FFFFFF'),
+    'gbinverse': ('FFFFFF','FFDE00','008484','000000'),
+    'gbreinverse': ('000000','008484','FFDE00','FFFFFF'),
+    'bluepurple': ('000000','0042C5','B494FF','FFFFFF'),
+
 }
 
 def palette_convert(palette_tuple):
@@ -166,12 +179,17 @@ def matrix_to_image(matrix_2bit,palette='gray',save=False):
     """
     Convert an image matrix back into a PIL image object
     """
+
     matrix = [[(3-x) for x in row] for row in matrix_2bit]
     width = len(matrix[0])
     raw_bytes = bytes([x for y in matrix for x in y])
     dim = (width,len(raw_bytes)//width)
     image = Image.frombytes('P',dim,raw_bytes)
-    image.putpalette(palette_convert(PALETTES[palette]))
+    if type(palette) == tuple:
+        image.putpalette(palette_convert(palette))
+    else:
+        image.putpalette(palette_convert(PALETTES[palette]))
+        
     if save:
         image.save(time.strftime('gbp_out/gbp_%Y%m%d_%H%M%S.png'),'PNG')
     return image
@@ -200,7 +218,7 @@ def gb_tile_to_matrix(gbtile_bytes):
 
     #flip color order from gbtile format
     #matrix = [[(3-x) for x in row] for row in matrix_2bit]
-    return matrix
+    return matrix_2bit
 
 
 

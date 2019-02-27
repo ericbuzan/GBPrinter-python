@@ -17,6 +17,12 @@ def main():
                         choices=['bayer','none'],
                         help="Dithering algorithm to use"
                         )
+    parser.add_argument('-p', '--palette',
+                        dest="palette", 
+                        default='gray', 
+                        choices=gbimage.PALETTES.keys(),
+                        help="Color palette to use"
+                        )
     parser.add_argument('-w', '--width',
                         dest="width", 
                         default=0, 
@@ -41,7 +47,7 @@ def main():
     else:
         raise IOError('dither must be "bayer" or "none"')
 
-    im = gbimage.matrix_to_image(new_mat,palette='camera',save=True)
+    im = gbimage.matrix_to_image(new_mat,palette=args.palette,save=True)
     im.show()
 
 if __name__ == '__main__':

@@ -11,8 +11,14 @@
 #define DATASUM_DONE 4
 #define RESPONSE_PARTIAL 5
 
+//clock status
+#define CLOCK_LOW 0
+#define CLOCK_LOW_READ 1
+#define CLOCK_HIGH 2
+
 byte temp_byte;
 byte status;
+byte clock_status;
 byte rx_byte;
 byte tx_byte;
 byte packet_state;
@@ -78,7 +84,15 @@ void loop() {
     }
   }
     
-  if (digitalRead(GBClock) == 0) {
+  if (digitalRead(GBClock) == 0 && clock_status==CLOCK_HIGH) {
+    clock_status = CLOCK_LOW;
+  }
+  if (digitalRead(GBClock) == 1) {
+    clock_status = CLOCK_HIGH;
+  }
+
+  if (clock_status == CLOCK_LOW){
+    clock_status = CLOCK_LOW_READ;
     rx_byte = GBSerialIO(tx_byte);
     tick = millis();
 
@@ -137,13 +151,23 @@ void loop() {
     Serial.write(data_remain);
   }
 
-  if (millis() - tick > 150) {
+  if (millis() - tick > 1500) {
     packet_state = IDLING;
     tick = millis();
+    for(int i=0; i<2; i++){
+      digitalWrite(LED_BUILTIN, HIGH);
+      delay(25);
+      digitalWrite(LED_BUILTIN, LOW);
+      delay(25);
+    }
   }
   if (packet_state == IDLING){
     digitalWrite(LED_BUILTIN, HIGH);
   } else {
     digitalWrite(LED_BUILTIN, LOW);
   }
+
+  //Serial.write(clock_status+69);
+  //Serial.write("\n");
+  //delay(100);
 }

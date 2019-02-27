@@ -17,8 +17,9 @@ LOW_BATTERY = 7
 
 class Emulator:
 
-        def __init__(self,port=None):
+        def __init__(self,port=None,palette=image.PALETTES['gray']):
             self.logger = logging.getLogger(__name__)
+            self.palette = palette
             self.current_packet = Packet()
 
             if port == None:
@@ -126,7 +127,7 @@ class Emulator:
                 end_margin = packet.data[1] % 16
                 self._fullimage += self._buffer
                 image_mat = image.gb_tile_to_matrix(self._fullimage)
-                image_obj = image.matrix_to_image(image_mat,save=True)
+                image_obj = image.matrix_to_image(image_mat,save=True,palette=self.palette)
                 if end_margin != 0:
                     self.logger.info('Full image sent!')
                     self._fullimage = b''
