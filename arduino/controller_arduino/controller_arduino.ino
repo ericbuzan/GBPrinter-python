@@ -1,6 +1,6 @@
-#define GBClock 8
-#define GBIn 9
-#define GBOut 10
+#define GBClock 2
+#define GBIn 4
+#define GBOut 5
 
 #define bitDelay 60
 #define byteDelay 240

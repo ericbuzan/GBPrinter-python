@@ -15,11 +15,11 @@ def gray_resize(image,rotate='auto',align='center'):
     if rotate in ['auto','portrait']:
         w,h = image.size
         if w>h:
-            image = image.transpose(Image.ROTATE_90)
+            image = image.transpose(Image.ROTATE_270)
     elif rotate == 'landscape':
         w,h = image.size
         if h>w:
-            image = image.transpose(Image.ROTATE_90)
+            image = image.transpose(Image.ROTATE_270)
     elif rotate == 'none':
         pass
     else:

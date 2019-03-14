@@ -28,16 +28,16 @@ def main():
     parser.add_argument('filename')
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
 
     payload = gbimage.image_to_gbtile(args.filename,args.dither,args.rotate,args.align)
     logger.info('payload is ready')
 
     matr = gbimage.gb_tile_to_matrix(payload)
-    im = gbimage.matrix_to_image(matr,palette='camera')
-    im.show()
-    sys.exit(0)
+    #im = gbimage.matrix_to_image(matr,palette='camera')
+    #im.show()
+    #sys.exit(0)
 
     printer = gbprinter.controller.Controller()
 

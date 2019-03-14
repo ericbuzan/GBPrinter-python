@@ -21,7 +21,7 @@ class Controller:
     def find_serial(self):
         opsys = platform.system()
         if opsys == 'Windows':
-            ports = ['COM%s' % (i + 1) for i in range(2,256)]
+            ports = ['COM%s' % (i + 1) for i in range(1,256)]
         elif opsys == 'Linux':
             ports = glob.glob('/dev/tty[A-Za-z]*')
         elif opsys == 'Darwin':
