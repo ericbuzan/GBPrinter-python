@@ -1,17 +1,24 @@
 from PIL import Image
 import time
+import numpy as np
+import math
 
-def gray_resize(image,rotate='auto',align='center'):
+def gray_resize(in_image,rotate='auto',align='center'):
     """
     Resizes an image (either a PIL image object or a filepath) to fit in 160
     pixels wide, optionally rotating in the process to be larger, and converts
     to grayscale     
     """
 
-    if type(image) == str:
-        image = Image.open(image)
+    if type(in_image) == str:
+        in_image = Image.open(in_image)
 
-    #first, rotation
+    if in_image.mode == 'RGBA':
+        image = clear_transparent(in_image)
+    else:
+            image = in_image
+    
+    #then, rotation
     if rotate in ['auto','portrait']:
         w,h = image.size
         if w>h:
@@ -40,109 +47,112 @@ def gray_resize(image,rotate='auto',align='center'):
     elif align == 'bottom':
         image_new.paste(image,(0,final_h-new_h))
 
-    image = image_new.convert('L')
+    return to_gray(image_new)
 
+def clear_transparent(in_image):
+    """
+    get rid of transparent pixels in image, make then white
+    """
+    image = Image.new('RGBA',in_image.size,(255,255,255,255))
+    image.paste(in_image,(0,0),in_image)
+    image = image.convert('RGB')
     return image
 
-def image_to_matrix(image):
+def to_gray(image):
     """
-    converts a PIL image object into a matrix of grayscale values
-    matrix = list of lists, no numpy here
-    """
-    width,height = image.size
-
-    raw_bytes = image.tobytes()
-    raw_num = [i for i in raw_bytes]
-    #matrix = [[0]*16]*len(raw_num//16)
-    #for i in range(len(raw_num//16)):
-    #    matrix[i] = raw_num[16*i:16*(i+1)]
-    matrix = [raw_num[width*i:width*(i+1)] for i in range(len(raw_num)//width)]
-    return matrix
-
-def bayer_dither(matrix):
-    """
-    Performs Bayer dithering on an image matrix (created from image_to_matrix)
-    """
-    width = len(matrix[0])
-
-    coeff = [[ 0, 8, 2,10],
-             [12, 4,14, 6],
-             [ 3,11, 1, 9],
-             [15, 7,13, 5]]
-
-    unpacked = [x for y in coeff for x in y]
-
-    out_matrix = [[0 for i in range(width)] for i in range(len(matrix))]
-
-    for y in range(len(matrix)):
-        for x in range(width):
-            n = matrix[y][x]
-            c = coeff[y%4][x%4] + .5
-            r = 82
-            out_matrix[y][x] = round(n + r*(c/16 - 1/2))
-
-    out_matrix = convert_2bit(out_matrix)
-    return(out_matrix)
-
-
-def convert_2bit(matrix):
-    """
-    Converts grayscale to 2 bit gray palette (0/85/170/255).
-    Colors are rounded to nearest color, so grays are more likely
+    Just convert it to grayscale
     """
 
-    width = len(matrix[0])
+    if type(image) == str:
+        image = Image.open(image)
 
-    out_matrix = [[0 for i in range(width)] for i in range(len(matrix))]
+    return image.convert('L')
 
-    for y in range(len(matrix)):
-        for x in range(width):
-            n = matrix[y][x]
-            out_matrix[y][x] = 3 - round(n/85)
-    return out_matrix
+def bayer(image):
+    if type(image) == type(Image.new('RGB',(1,1))):
+        image = np.array(image)
 
-def convert_2bit_direct(matrix):
+    coeff = np.array([[ 0, 8, 2,10],
+                      [12, 4,14, 6],
+                      [ 3,11, 1, 9],
+                      [15, 7,13, 5]])
+
+    h,w = image.shape
+    num_tiles = tuple([math.ceil(x/4) for x in image.shape])
+    c = np.tile(coeff,num_tiles)[:h,:w]
+    r = 82 #magic number
+
+    image = image + r*(c/16 - 1/2)
+    image = 85 * np.round(image/85).astype(int)
+    return image
+
+def equal_bins(image):
+    if type(image) == type(Image.new('RGB',(1,1))):
+        image = np.array(image)
+    return image // 64 * 85
+
+def nearest_color(image):
+    if type(image) == type(Image.new('RGB',(1,1))):
+        image = np.array(image)
+    return 85 * np.round(image/85).astype(int)
+
+class DitherFactory:
+    def __init__(self):
+        self._modes = {}
+
+    def register(self, key, func):
+        self._modes[key] = func
+
+    def select(self, key, **kwargs):
+        mode = self._modes.get(key)
+        if not mode:
+            raise ValueError(key)
+        return mode
+
+    @property
+    def modes(self):
+        return self._modes.keys()
+
+dither_factory = DitherFactory()
+dither_factory.register('bayer',bayer)
+dither_factory.register('equalbins',equal_bins)
+dither_factory.register('nearest',nearest_color)
+
+def dither(image,mode='bayer'):
     """
-    Converts grayscale to 2 bit gray palette (0/85/170/255).
-    Colors are divided into equal bins, so all 4 shades are equally likely
+    Dither the image with the selected algorithm and return a 
+    numpy array of grayscale values (0/85/170/255)
     """
 
-    width = len(matrix[0])
-    out_matrix = [[0 for i in range(width)] for i in range(len(matrix))]
+    im_arr = np.array(image)
 
-    for y in range(len(matrix)):
-        for x in range(width):
-            n = matrix[y][x]
-            o = n//64
-            if o > 3:
-                o = 3
-            if o < 0:
-                o = 0
-            out_matrix[y][x] = 3 - o
-    return out_matrix
+    if mode not in dither_factory.modes:
+        raise ValueError('Invalid dithering method')
+    dither_func = dither_factory.select(mode)
+    return dither_func(image)
 
-def matrix_to_gbtile(matrix):
+def convert_gray_to_2bit(arr):
     """
-    Converts a 2-bit image matrix from convert_2bit or whatnot into the Game Boy
-    tile format. The output is a bytestring (almost) ready to send to the GB Printer,
-    you'll have to chop it into 640-byte sections on your own.
+    Converts grayscale array to 2 bit gray palette.
+    Will probably look weird if array isn't already 0/85/170/255.
+    """
+    return 3 - arr // 85
+
+
+def convert_gray_to_gbtile(arr):
+    """
+    Converts a gray array to the gb tile format almost ready to send to the
+    GB Printer, you'll have to chop it into 640-byte sections on your own.
     """
 
-    #convert to 0-3, where 0 is white and 3 is black
-    #nope, done by conversion to 2bit now
-    raw_num = [x for y in matrix for x in y]
+    twobit_arr = 3 - arr // 85
 
     gbtile = b''
-    B = 160*8 #pixels in a 160x8 strip
-    num_strips = len(raw_num)//B
-    num_tiles = len(raw_num)//64
-    for s in range(num_strips):
-        strip = raw_num[B*s:B*(s+1)]
-        for t in range(20):
+    num_strips = twobit_arr.shape[0]
+    for strip in np.vsplit(twobit_arr,num_strips//8):
+        for tile in np.hsplit(strip,20):
             tile_hex = b''
-            for r in range(8):
-                start = 160*r + 8*t
-                row = strip[start:start+8]
+            for row in tile:
                 low = bytes([sum([(x%2)*(2**(7-i)) for i,x in enumerate(row)])])
                 high = bytes([sum([(x//2)*(2**(7-i)) for i,x in enumerate(row)])])
                 tile_hex = tile_hex + low + high
@@ -222,19 +232,13 @@ def gb_tile_to_matrix(gbtile_bytes):
 
 
 
-def image_to_gbtile(image,dither='bayer',rotate='auto',align='center'):
+def image_to_gbtile(image,dither_mode='bayer',rotate='auto',align='center'):
     """
     Does the full conversion, image file/object goes in, gbtile bytestring 
     comes out. This is what you want to use tor everyday processing
     """
     image = gray_resize(image,rotate=rotate,align=align)
-    mat = image_to_matrix(image)
-    if dither == 'bayer':
-        new_mat = bayer_dither(mat)
-    elif dither == 'none':
-        new_mat = convert_2bit_direct(mat)
-    else:
-        raise IOError('dither must be "bayer" or "none"')
-    gb_tiles = matrix_to_gbtile(new_mat)
+    im_dith = dither(image,dither_mode)
+    gb_tiles = convert_gray_to_gbtile(im_dith)
 
     return gb_tiles

@@ -16,7 +16,7 @@ def main():
     parser.add_argument('-d', '--dithering',
                         dest="dither", 
                         default='bayer', 
-                        choices=['bayer','none'],
+                        choices=gbimage.dither_factory.modes,
                         help="Dithering algorithm to use"
                         )
     parser.add_argument('-a', '--align',
