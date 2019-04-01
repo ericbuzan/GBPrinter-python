@@ -2,6 +2,7 @@ import gbprinter.controller
 from gbprinter import image as gbimage
 import argparse
 from PIL import Image
+import numpy as np
 
 def main():
     parser = argparse.ArgumentParser(description='Print on a Game Boy Printer!')
@@ -14,7 +15,7 @@ def main():
     parser.add_argument('-d', '--dithering',
                         dest="dither", 
                         default='bayer', 
-                        choices=['bayer','none'],
+                        choices=gbimage.dither_factory.modes,
                         help="Dithering algorithm to use"
                         )
     parser.add_argument('-p', '--palette',
@@ -38,16 +39,9 @@ def main():
         pass
 
     image_gray = image_in.convert('L')
-    mat_in = gbimage.image_to_matrix(image_gray)
-
-    if args.dither == 'bayer':
-        new_mat = gbimage.bayer_dither(mat_in)
-    elif args.dither == 'none':
-        new_mat = gbimage.convert_2bit_direct(mat_in)
-    else:
-        raise IOError('dither must be "bayer" or "none"')
-
-    im = gbimage.matrix_to_image(new_mat,palette=args.palette,save=True)
+    dithered = gbimage.dither(image_gray,args.dither)
+    twobit = gbimage.gray_to_twobit(dithered)
+    im = gbimage.twobit_to_image(twobit,palette=args.palette,save=True)
     im.show()
 
 if __name__ == '__main__':

@@ -83,18 +83,19 @@ def bayer(image):
     r = 82 #magic number
 
     image = image + r*(c/16 - 1/2)
-    image = 85 * np.round(image/85).astype(int)
+    image = 85 * np.round(image/85).astype(np.uint8)
+
     return image
 
 def equal_bins(image):
     if type(image) == type(Image.new('RGB',(1,1))):
         image = np.array(image)
-    return image // 64 * 85
+    return (image // 64 * 85).astype(np.uint8)
 
 def nearest_color(image):
     if type(image) == type(Image.new('RGB',(1,1))):
         image = np.array(image)
-    return 85 * np.round(image/85).astype(int)
+    return 85 * np.round(image/85).astype(np.uint8)
 
 class DitherFactory:
     def __init__(self):
@@ -131,7 +132,7 @@ def dither(image,mode='bayer'):
     dither_func = dither_factory.select(mode)
     return dither_func(image)
 
-def convert_gray_to_2bit(arr):
+def gray_to_twobit(arr):
     """
     Converts grayscale array to 2 bit gray palette.
     Will probably look weird if array isn't already 0/85/170/255.
@@ -139,17 +140,15 @@ def convert_gray_to_2bit(arr):
     return 3 - arr // 85
 
 
-def convert_gray_to_gbtile(arr):
+def twobit_to_gbtile(arr):
     """
-    Converts a gray array to the gb tile format almost ready to send to the
+    Converts a twobit array to the gb tile format almost ready to send to the
     GB Printer, you'll have to chop it into 640-byte sections on your own.
     """
 
-    twobit_arr = 3 - arr // 85
-
     gbtile = b''
-    num_strips = twobit_arr.shape[0]
-    for strip in np.vsplit(twobit_arr,num_strips//8):
+    rows = arr.shape[0]
+    for strip in np.vsplit(arr,rows//8):
         for tile in np.hsplit(strip,20):
             tile_hex = b''
             for row in tile:
@@ -160,6 +159,7 @@ def convert_gray_to_gbtile(arr):
 
     return gbtile
 
+#black, darkgray, lightgray, white
 PALETTES = {
     'gray': ('000000','555555','AAAAAA','FFFFFF'),
     'gbcamera' : ('000000','0063C5','7BFF31','FFFFFF'),
@@ -185,16 +185,14 @@ def palette_convert(palette_tuple):
     palette_list = [int(color,16) for color in palette_pairs]
     return palette_list
 
-def matrix_to_image(matrix_2bit,palette='gray',save=False):
+def twobit_to_image(arr,palette='gray',save=False):
     """
     Convert an image matrix back into a PIL image object
     """
 
-    matrix = [[(3-x) for x in row] for row in matrix_2bit]
-    width = len(matrix[0])
-    raw_bytes = bytes([x for y in matrix for x in y])
-    dim = (width,len(raw_bytes)//width)
-    image = Image.frombytes('P',dim,raw_bytes)
+    arr_flip = 3 - arr
+
+    image = Image.fromarray(arr_flip,'P')
     if type(palette) == tuple:
         image.putpalette(palette_convert(palette))
     else:
@@ -204,7 +202,7 @@ def matrix_to_image(matrix_2bit,palette='gray',save=False):
         image.save(time.strftime('gbp_out/gbp_%Y%m%d_%H%M%S.png'),'PNG')
     return image
 
-def gb_tile_to_matrix(gbtile_bytes):
+def gbtile_to_twobit(gbtile_bytes):
     """
     converts bytes in GB tile format to 2-bit matrix
     """
@@ -215,7 +213,8 @@ def gb_tile_to_matrix(gbtile_bytes):
     #gbtile_bytes = gbtile_bytes + bytes(padding)
 
     num_pages = len(gbtile_bytes)//640
-    matrix_2bit = [[0]*160 for i in range(16*num_pages)]
+    twobit = np.empty((16*num_pages,160))
+
     for s in range(num_pages*2):
         strip_bytes = gbtile_bytes[320*s:320*(s+1)]
         for t in range(20):
@@ -224,11 +223,9 @@ def gb_tile_to_matrix(gbtile_bytes):
                 row_bytes = tile_bytes[2*r:2*(r+1)]
                 low, high = row_bytes
                 mat_row = [(low>>i & 1) + 2*(high>>i & 1) for i in reversed(range(8))]
-                matrix_2bit[s*8+r][t*8:(t+1)*8] = mat_row
+                twobit[s*8+r,t*8:(t+1)*8] = mat_row
 
-    #flip color order from gbtile format
-    #matrix = [[(3-x) for x in row] for row in matrix_2bit]
-    return matrix_2bit
+    return twobit.astype(np.uint8)
 
 
 
@@ -239,6 +236,7 @@ def image_to_gbtile(image,dither_mode='bayer',rotate='auto',align='center'):
     """
     image = gray_resize(image,rotate=rotate,align=align)
     im_dith = dither(image,dither_mode)
-    gb_tiles = convert_gray_to_gbtile(im_dith)
+    twobit = gray_to_twobit(im_dith)
+    gb_tiles = twobit_to_gbtile(twobit)
 
     return gb_tiles

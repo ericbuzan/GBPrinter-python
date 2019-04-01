@@ -176,7 +176,6 @@ class Emulator:
             raw_offset = 0
             while comp_offset < len(comp_data):
                 command_byte = comp_data[comp_offset]
-                #self.logger.debug('command byte {}/{}: {}'.format(comp_offset,len_comp, command_byte))
                 comp_offset += 1
                 if command_byte & 0x80: #compressed run
                     length = command_byte - 0x80 + 2

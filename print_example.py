@@ -31,15 +31,10 @@ def main():
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
 
+    printer = gbprinter.controller.Controller()
+
     payload = gbimage.image_to_gbtile(args.filename,args.dither,args.rotate,args.align)
     logger.info('payload is ready')
-
-    matr = gbimage.gb_tile_to_matrix(payload)
-    #im = gbimage.matrix_to_image(matr,palette='camera')
-    #im.show()
-    #sys.exit(0)
-
-    printer = gbprinter.controller.Controller()
 
     num_strips = len(payload)//640
     strips_done = 0
